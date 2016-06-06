@@ -1,0 +1,8 @@
+{
+    "Environment": {
+        "Server": "http://server:8080/tfs/collectionName",
+        "TeamProject" :"TeamProjectName",
+        "BuildNumber": "20160602.1",
+        "AgentHomeDir": "d:\\Temp"
+    }
+}
