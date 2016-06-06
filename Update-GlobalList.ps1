@@ -12,11 +12,11 @@ function Update-GlobalListXml
     )
     
     Write-Verbose "Checking whether '$glName' exists"
-    $buildList = $globalListsDoc.GLOBALLISTS.GLOBALIST | Where-Object { $_.name -eq $glName }
+    $buildList = $globalListsDoc.GLOBALLISTS.GLOBALLIST | Where-Object { $_.name -eq $glName }
     if ($buildList -eq $null)
     {
         Write-Host "GlobalList '$glName' does not exist and will be created"
-        $globalLists = [xml]$globalListsDoc.GLOBALLISTS
+        $globalLists = $globalListsDoc.GLOBALLISTS
         if($globalLists -eq $null)
         {
             $doc = [xml]"<gl:GLOBALLISTS xmlns:gl=`"http://schemas.microsoft.com/VisualStudio/2005/workitemtracking/globallists`"></gl:GLOBALLISTS>"

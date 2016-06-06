@@ -41,13 +41,40 @@ Describe "Global working" {
 
 Describe "Test Update-GlobalListXml" {
     
-    Context "when project globallist does not exists" {
+    Context "when project collection globallist does not exists" {
         It "it is created and the buildNumber is added as listitem" {
             $buildNumber = "20160606.1"
             $glName = "Builds - $($config.Environment.TeamProject)"
             $gls = Update-GlobalListXml -globalListsDoc $null -glName $glName -buildNumber $buildNumber
             $gl = $gls.GLOBALLISTS.GLOBALLIST | Where-Object { $_.name -eq $glName }
             $gl | Should Not BeNullOrEmpty 
+            $gl.Length | Should BeNullOrEmpty
+            $gl.LISTITEM | Where-Object { $_.value -eq $buildNumber } | Should Not BeNullOrEmpty
+        }
+    }
+
+    Context "when project collection globallist already exists" {
+        It "it adds a LISTITEM with the buildNumber" {
+            $buildNumber = "20160606.2"
+            $glName = "Builds - $($config.Environment.TeamProject)"
+            $xml = [xml]"<gl:GLOBALLISTS xmlns:gl=`"http://schemas.microsoft.com/VisualStudio/2005/workitemtracking/globallists`"><GLOBALLIST name=`"$glName`"><LISTITEM value=`"20160606.1`" /></GLOBALLIST></gl:GLOBALLISTS>"
+            $gls = Update-GlobalListXml -globalListsDoc $xml -glName $glName -buildNumber $buildNumber
+            $gl = $gls.GLOBALLISTS.GLOBALLIST | Where-Object { $_.name -eq $glName }
+            $gl | Should Not BeNullOrEmpty
+            $gl.Length | Should BeNullOrEmpty
+            $gl.LISTITEM | Where-Object { $_.value -eq $buildNumber } | Should Not BeNullOrEmpty
+        }
+    }
+
+    Context "when project collection globallist already exists among multiple globallists" {
+        It "it adds a LISTITEM with the buildNumber" {
+            $buildNumber = "20160606.2"
+            $glName = "Builds - $($config.Environment.TeamProject)"
+            $xml = [xml]"<gl:GLOBALLISTS xmlns:gl=`"http://schemas.microsoft.com/VisualStudio/2005/workitemtracking/globallists`"><GLOBALLIST name =`"Activity`"><LISTITEM value=`"Coffee`" /><LISTITEM value=`"PingPong`" /><LISTITEM value=`"Giraffe painting`" /></GLOBALLIST><GLOBALLIST name =`"Environment`"><LISTITEM value=`"Pre-Prod`" /><LISTITEM value=`"Pre-PreProd`" /><LISTITEM value=`"Pre-PrePreProd`" /></GLOBALLIST><GLOBALLIST name=`"$glName`"><LISTITEM value=`"20160606.1`" /></GLOBALLIST></gl:GLOBALLISTS>"
+            $gls = Update-GlobalListXml -globalListsDoc $xml -glName $glName -buildNumber $buildNumber
+            $gl = $gls.GLOBALLISTS.GLOBALLIST | Where-Object { $_.name -eq $glName }
+            $gl | Should Not BeNullOrEmpty
+            $gl.Length | Should BeNullOrEmpty
             $gl.LISTITEM | Where-Object { $_.value -eq $buildNumber } | Should Not BeNullOrEmpty
         }
     }
