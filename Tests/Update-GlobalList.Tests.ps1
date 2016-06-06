@@ -23,7 +23,7 @@ Describe "Global working" {
             $env:AGENT_HOMEDIRECTORY | Should Be $config.Environment.AgentHomeDir
         }
     }
-    
+
     BeforeEach {
         $env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI = $config.Environment.Server
         $env:SYSTEM_TEAMPROJECT = $config.Environment.TeamProject
@@ -39,13 +39,61 @@ Describe "Global working" {
     }
 }
 
+Describe "Test Update-GlobalList" {
+    
+    BeforeEach {
+        $env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI = $config.Environment.Server
+        $env:SYSTEM_TEAMPROJECT = $config.Environment.TeamProject
+        $env:BUILD_BUILDNUMBER = $config.Environment.BuildNumber
+        $env:AGENT_HOMEDIRECTORY = $config.Environment.AgentHomeDir
+    }
+
+    AfterEach {
+        $env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI = $null
+        $env:SYSTEM_TEAMPROJECT = $null
+        $env:BUILD_BUILDNUMBER = $null
+        $env:AGENT_HOMEDIRECTORY = $null
+    }
+
+    Context "when adding a LISTITEM" {
+        Mock Invoke-GlobalListAPI {} -Verifiable -ParameterFilter { $Export -eq $true }
+        Mock Invoke-GlobalListAPI {} -Verifiable -ParameterFilter { $Import -eq $true }
+        Mock Update-GlobalListXml { return [xml]"<G></G>" }
+        Mock Get-WorkItemStore { return [System.Activator]::CreateInstance([Microsoft.TeamFoundation.WorkItemTracking.Client.WorkItemStore], $true) } 
+        
+        It "ImportGlobalList and ExportGlobalList are called" {
+            Update-GlobalList | Assert-VerifiableMocks
+        }
+    }
+
+    Context "when connected to a staging server" {
+        It "Adds the LISTITEM element" {
+            Update-GlobalList
+        }
+    }
+}
+
 Describe "Test Update-GlobalListXml" {
     
-    Context "when project collection globallist does not exists" {
+    Context "when project collection globallist is empty" {
+        It "it is created and the buildNumber is added as listitem" {
+            $buildNumber = "20160606.1"
+            $glName = "Builds - $($config.Environment.TeamProject)"
+            $gls = Update-GlobalListXml -globalListsDoc (new-object System.Xml.XmlDocument) -glName $glName -buildNumber $buildNumber
+            $gls.OuterXml.StartsWith("<gl:GLOBALLISTS") | Should Be $true
+            $gl = $gls.GLOBALLISTS.GLOBALLIST | Where-Object { $_.name -eq $glName }
+            $gl | Should Not BeNullOrEmpty 
+            $gl.Length | Should BeNullOrEmpty
+            $gl.LISTITEM | Where-Object { $_.value -eq $buildNumber } | Should Not BeNullOrEmpty
+        }
+    }
+    
+    Context "when globallists does not exists" {
         It "it is created and the buildNumber is added as listitem" {
             $buildNumber = "20160606.1"
             $glName = "Builds - $($config.Environment.TeamProject)"
             $gls = Update-GlobalListXml -globalListsDoc $null -glName $glName -buildNumber $buildNumber
+            $gls.OuterXml.StartsWith("<gl:GLOBALLISTS") | Should Be $true
             $gl = $gls.GLOBALLISTS.GLOBALLIST | Where-Object { $_.name -eq $glName }
             $gl | Should Not BeNullOrEmpty 
             $gl.Length | Should BeNullOrEmpty
@@ -59,6 +107,7 @@ Describe "Test Update-GlobalListXml" {
             $glName = "Builds - $($config.Environment.TeamProject)"
             $xml = [xml]"<gl:GLOBALLISTS xmlns:gl=`"http://schemas.microsoft.com/VisualStudio/2005/workitemtracking/globallists`"><GLOBALLIST name=`"$glName`"><LISTITEM value=`"20160606.1`" /></GLOBALLIST></gl:GLOBALLISTS>"
             $gls = Update-GlobalListXml -globalListsDoc $xml -glName $glName -buildNumber $buildNumber
+            $gls.OuterXml.StartsWith("<gl:GLOBALLISTS") | Should Be $true
             $gl = $gls.GLOBALLISTS.GLOBALLIST | Where-Object { $_.name -eq $glName }
             $gl | Should Not BeNullOrEmpty
             $gl.Length | Should BeNullOrEmpty
@@ -72,10 +121,20 @@ Describe "Test Update-GlobalListXml" {
             $glName = "Builds - $($config.Environment.TeamProject)"
             $xml = [xml]"<gl:GLOBALLISTS xmlns:gl=`"http://schemas.microsoft.com/VisualStudio/2005/workitemtracking/globallists`"><GLOBALLIST name =`"Activity`"><LISTITEM value=`"Coffee`" /><LISTITEM value=`"PingPong`" /><LISTITEM value=`"Giraffe painting`" /></GLOBALLIST><GLOBALLIST name =`"Environment`"><LISTITEM value=`"Pre-Prod`" /><LISTITEM value=`"Pre-PreProd`" /><LISTITEM value=`"Pre-PrePreProd`" /></GLOBALLIST><GLOBALLIST name=`"$glName`"><LISTITEM value=`"20160606.1`" /></GLOBALLIST></gl:GLOBALLISTS>"
             $gls = Update-GlobalListXml -globalListsDoc $xml -glName $glName -buildNumber $buildNumber
+            $gls.OuterXml.StartsWith("<gl:GLOBALLISTS") | Should Be $true
             $gl = $gls.GLOBALLISTS.GLOBALLIST | Where-Object { $_.name -eq $glName }
             $gl | Should Not BeNullOrEmpty
             $gl.Length | Should BeNullOrEmpty
             $gl.LISTITEM | Where-Object { $_.value -eq $buildNumber } | Should Not BeNullOrEmpty
+        }
+    }
+
+    Context "when LISTITEM already exists" {
+        It "it throw an exception" {
+            $buildNumber = "20160606.1"
+            $glName = "Builds - $($config.Environment.TeamProject)"
+            $xml = [xml]"<gl:GLOBALLISTS xmlns:gl=`"http://schemas.microsoft.com/VisualStudio/2005/workitemtracking/globallists`"><GLOBALLIST name =`"Activity`"><LISTITEM value=`"Coffee`" /><LISTITEM value=`"PingPong`" /><LISTITEM value=`"Giraffe painting`" /></GLOBALLIST><GLOBALLIST name =`"Environment`"><LISTITEM value=`"Pre-Prod`" /><LISTITEM value=`"Pre-PreProd`" /><LISTITEM value=`"Pre-PrePreProd`" /></GLOBALLIST><GLOBALLIST name=`"$glName`"><LISTITEM value=`"20160606.1`" /></GLOBALLIST></gl:GLOBALLISTS>"
+            { Update-GlobalListXml -globalListsDoc $xml -glName $glName -buildNumber $buildNumber } | Should throw
         }
     }
 }
