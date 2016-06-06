@@ -1,6 +1,6 @@
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
-. "$here\..\$sut" # This file  resides in a sub folder Tests.
+. "$here\..\$sut" # This file resides in a sub folder Tests.
 
 # Loading configuration file
 $configFilePath = Get-ChildItem -Path $here -Filter "*Config.json" | Select-Object -First 1
@@ -36,5 +36,19 @@ Describe "Global working" {
         $env:SYSTEM_TEAMPROJECT = $null
         $env:BUILD_BUILDNUMBER = $null
         $env:AGENT_HOMEDIRECTORY = $null
+    }
+}
+
+Describe "Test Update-GlobalListXml" {
+    
+    Context "when project globallist does not exists" {
+        It "it is created and the buildNumber is added as listitem" {
+            $buildNumber = "20160606.1"
+            $glName = "Builds - $($config.Environment.TeamProject)"
+            $gls = Update-GlobalListXml -globalListsDoc $null -glName $glName -buildNumber $buildNumber
+            $gl = $gls.GLOBALLISTS.GLOBALLIST | Where-Object { $_.name -eq $glName }
+            $gl | Should Not BeNullOrEmpty 
+            $gl.LISTITEM | Where-Object { $_.value -eq $buildNumber } | Should Not BeNullOrEmpty
+        }
     }
 }
