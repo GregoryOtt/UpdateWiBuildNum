@@ -51,7 +51,7 @@ function Invoke-GlobalListAPI()
     try {
         if($import)
         {
-            $wiStore.ImportGlobalLists($globalLists.OuterXml)
+            $wiStore.ImportGlobalLists($globalLists.OuterXml) # Account must be explicitly in the Project Administrator Group
         }
         if($export)
         {
@@ -69,12 +69,10 @@ function Get-WorkItemStore()
     [CmdletBinding(SupportsShouldProcess=$false)]
     param(
         [parameter(Mandatory=$true)][string][ValidateNotNullOrEmpty()]$tpcUri,
-        [parameter(Mandatory=$true)][string][ValidateNotNullOrEmpty()]$agentHome
+        [parameter(Mandatory=$true)][string][ValidateNotNullOrEmpty()]$agentWorker
     )
 
     # Loads client API binaries from agent folder
-    $agentWorker = Join-Path $agentHome "AgentBin\agent\Worker"
-
     $clientDll = Join-Path $agentWorker "Microsoft.TeamFoundation.Client.dll"
     $wiTDll = Join-Path $agentWorker "Microsoft.TeamFoundation.WorkItemTracking.Client.dll"
     [System.Reflection.Assembly]::LoadFrom($clientDll) | Write-Verbose
@@ -90,6 +88,20 @@ function Get-WorkItemStore()
         throw $_
     }
     
+}
+
+function Get-WITDataStore64
+{
+	[CmdletBinding(SupportsShouldProcess=$false)]
+    param()
+
+	if($env:VS140COMNTOOLS -eq $null)
+	{
+		throw New-Object System.InvalidOperationException "Visual Studio 2015 must be installed on the build agent" # TODO: Change it by checking agent capabilities
+	}
+
+	$idePath = Join-Path (Split-Path -Parent $env:VS140COMNTOOLS) "IDE"
+	return Get-ChildItem -Recurse -Path $idePath -Filter "Microsoft.WITDataStore64.dll" | Select-Object -First 1 -ExpandProperty FullName
 }
 
 function Update-GlobalList
@@ -109,14 +121,26 @@ function Update-GlobalList
     $globalListName = "Builds - $teamProjectName"
     Write-Verbose "GlobalList name: '$teamProjectName'"
 
+	# Copy 'Microsoft.WITDataStore64.dll' from Visual Studio directory to AgentBin directory if it does not exist
+	$agentWorker = Join-Path $agentHome "agent\Worker"
+	$targetPath = Join-Path $agentWorker "Microsoft.WITDataStore64.dll" # Only compatible with x64 process #TODO use constant instead
+	if(-not (Test-Path $targetPath))
+	{
+		$wITDataStore64FilePath = Get-WITDataStore64
+		Write-Host "Copying $wITDataStore64FilePath to $targetPath"
+		Copy-Item $wITDataStore64FilePath $targetPath | Write-Verbose
+	}
+	
     # Connect to TFS TPC
-    $wiStore = Get-WorkItemStore -tpcUri $tpcUri -agentHome $agentHome
+    $wiStore = Get-WorkItemStore -tpcUri $tpcUri -agentWorker $agentWorker
 
     # Retrive GLOBALLISTS
     $xmlDoc = Invoke-GlobalListAPI -export -wiStore $wiStore
     $gls2 = Update-GlobalListXml -globalListsDoc $xmlDoc -glName $globalListName -buildNumber $buildNumber
-    
-    #$gls2.OuterXml | Write-Host -foregroundcolor cyan
 
     Invoke-GlobalListAPI -import -globalLists $gls2 -wiStore $wiStore
+
+	Write-Verbose $gls2.OuterXml
 }
+
+Update-GlobalList
